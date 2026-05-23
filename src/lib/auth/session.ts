@@ -43,9 +43,12 @@ export async function createSession(userId: string, role: string) {
   })
 }
 
-export async function verifySession() {
-  const cookieStore = await cookies()
-  const cookie = cookieStore.get("session")?.value
+export async function verifySession(token?: string) {
+  let cookie = token
+  if (!cookie) {
+    const cookieStore = await cookies()
+    cookie = cookieStore.get("session")?.value
+  }
   const session = await decrypt(cookie)
 
   if (!session?.userId) {

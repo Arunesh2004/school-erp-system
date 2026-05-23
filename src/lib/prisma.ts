@@ -1,8 +1,11 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { createClient } from '@libsql/client'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 
 const prismaClientSingleton = () => {
-  const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' })
+  const adapter = new PrismaLibSql({
+    url: process.env.DATABASE_URL || 'file:./dev.db',
+  })
   return new PrismaClient({ adapter })
 }
 

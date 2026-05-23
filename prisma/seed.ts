@@ -1,22 +1,22 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 import bcrypt from 'bcryptjs'
 
-const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' })
+const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL || 'file:./dev.db' })
 const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log('Seeding database with demo data...')
 
-  const adminPassword = await bcrypt.hash('Admin@12345', 10)
-  const teacherPassword = await bcrypt.hash('Teacher@12345', 10)
-  const studentPassword = await bcrypt.hash('Student@12345', 10)
+  const adminPassword = await bcrypt.hash('password123', 10)
+  const teacherPassword = await bcrypt.hash('password123', 10)
+  const studentPassword = await bcrypt.hash('password123', 10)
 
   // 1. Create Users
   const admin = await prisma.user.upsert({
     where: { email: 'admin@school.local' },
-    update: {},
+    update: { password: adminPassword },
     create: {
       email: 'admin@school.local',
       password: adminPassword,
@@ -27,7 +27,7 @@ async function main() {
 
   const teacher1User = await prisma.user.upsert({
     where: { email: 'teacher@school.local' },
-    update: {},
+    update: { password: teacherPassword },
     create: {
       email: 'teacher@school.local',
       password: teacherPassword,
@@ -38,7 +38,7 @@ async function main() {
 
   const teacher2User = await prisma.user.upsert({
     where: { email: 'teacher2@school.local' },
-    update: {},
+    update: { password: teacherPassword },
     create: {
       email: 'teacher2@school.local',
       password: teacherPassword,
@@ -49,7 +49,7 @@ async function main() {
 
   const teacher3User = await prisma.user.upsert({
     where: { email: 'teacher3@school.local' },
-    update: {},
+    update: { password: teacherPassword },
     create: {
       email: 'teacher3@school.local',
       password: teacherPassword,
@@ -129,7 +129,7 @@ async function main() {
   for (let i = 1; i <= 10; i++) {
     const studentUser = await prisma.user.upsert({
       where: { email: `student${i === 1 ? '' : i}@school.local` },
-      update: {},
+      update: { password: studentPassword },
       create: {
         email: `student${i === 1 ? '' : i}@school.local`,
         password: studentPassword,

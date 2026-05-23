@@ -4,12 +4,13 @@ import { verifySession } from '@/lib/auth/session'
 const protectedRoutes = ['/admin', '/teacher', '/student']
 const publicRoutes = ['/login']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isProtectedRoute = protectedRoutes.some(route => path.startsWith(route))
   const isPublicRoute = publicRoutes.some(route => path.startsWith(route))
 
-  const session = await verifySession()
+  const cookie = request.cookies.get('session')?.value
+  const session = await verifySession(cookie)
 
   if (isProtectedRoute && !session?.isAuth) {
     return NextResponse.redirect(new URL('/login', request.nextUrl))

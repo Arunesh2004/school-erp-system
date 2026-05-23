@@ -165,6 +165,14 @@ export async function finalizeRecord(
     return { success: false, error: "Not authorized for this class" }
   }
 
+  const existingRecord = await prisma.studentAcademicRecord.findUnique({
+    where: { studentId_academicSession: { studentId, academicSession } }
+  })
+
+  if (existingRecord?.status === "FINALIZED") {
+    return { success: false, error: "Record is already finalized and cannot be modified." }
+  }
+
   try {
     await prisma.studentAcademicRecord.upsert({
       where: {

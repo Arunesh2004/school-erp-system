@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum MarkStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AcademicSessionStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AcademicRecordStatus {
+  DRAFT
+  PUBLISHED
+  FINALIZED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(STUDENT)
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher   Teacher?
+  student   Student?
+
+  announcements Announcement[]
+  activityLogs  ActivityLog[]
+}
+
+model Teacher {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  classes    Class[]
+  subjects   Subject[]
+  marksGiven Mark[]
+  attendance Attendance[]
+}
+
+model Student {
+  id         String  @id @default(uuid())
+  userId     String  @unique
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classId    String?
+  class      Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
+  rollNumber String?
+
+  marks      Mark[]
+  attendance Attendance[]
+  academicRecords StudentAcademicRecord[]
+}
+
+model Class {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  
+  students   Student[]
+  subjects   Subject[]
+  attendance Attendance[]
+  academicRecords StudentAcademicRecord[]
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  classes   Class[]
+  marks     Mark[]
+}
+
+model Mark {
+  id        String     @id @default(uuid())
+  score     Float
+  maxScore  Float      @default(100)
+  examType  String     // e.g., 'Midterm', 'Final'
+  status    MarkStatus @default(DRAFT)
+  
+  studentId String
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher    @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([studentId, subjectId, examType])
+}
+
+model SchoolSettings {
+  id              String   @id @default("default") // Singleton
+  schoolName      String   @default("EduManage Academy")
+  schoolAddress   String   @default("123 Education Lane, Learning City")
+  contactNumber   String   @default("+1 234 567 8900")
+  principalName   String   @default("Dr. Jane Doe")
+  email           String   @default("contact@edumanage.com")
+  
+  activeSessionId String?
+  activeSession   AcademicSession? @relation(fields: [activeSessionId], references: [id])
+
+  updatedAt       DateTime @updatedAt
+}
+
+model AcademicSession {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  startDate   DateTime
+  endDate     DateTime
+  status      AcademicSessionStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  settings    SchoolSettings[]
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  date      DateTime
+  status    AttendanceStatus
+  remarks   String?
+
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date])
+}
+
+model Announcement {
+  id            String   @id @default(uuid())
+  title         String
+  content       String
+  targetRoles   String   // JSON string or comma-separated e.g. "STUDENT,TEACHER"
+  targetClasses String?  // Optional comma-separated list of class IDs
+  priority      String   @default("NORMAL") // "NORMAL", "HIGH"
+  expiresAt     DateTime?
+
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  action     String   // e.g., "MARK_PUBLISHED", "ATTENDANCE_MARKED"
+  entityType String   // e.g., "Mark", "Attendance", "Announcement"
+  entityId   String?  // The ID of the modified entity
+  details    String?  // JSON string of contextual changes
+
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+}
+
+model StudentAcademicRecord {
+  id                String   @id @default(uuid())
+
+  studentId         String
+  classId           String
+  academicSession   String
+
+  teacherRemarks    String?
+  principalRemarks  String?
+
+  finalPercentage      Float?
+  finalGrade           String?
+  attendancePercentage Float?
+  failedSubjectCount   Int?
+
+  status               AcademicRecordStatus @default(DRAFT)
+  publishedAt          DateTime?
+  finalizedAt          DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicSession])
+}

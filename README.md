@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# School ERP System
 
-## Getting Started
+A modern, full-stack School Enterprise Resource Planning (ERP) system designed to streamline academic operations, manage student records, and facilitate communication between administrators, teachers, and students.
 
-First, run the development server:
+## 🌟 Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The School ERP provides a centralized platform for managing the complete academic lifecycle. It features role-based access control, real-time dashboards, and comprehensive tools for marksheet management, attendance tracking, and class assignments. The system is built with a focus on data integrity, security, and a premium user experience.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Role-Based Access Control**: Distinct portals for Administrators, Teachers, and Students with strict authorization rules.
+- **Academic Lifecycle Management**: Full support for academic sessions, terms, and automated student promotion.
+- **Marksheet Management**: Robust grading system with support for DRAFT and PUBLISHED states, automated calculations, and secure finalization.
+- **Class & Subject Management**: Flexible assignment of teachers to homerooms and specific subjects.
+- **Real-time Dashboards**: Dynamic analytics and activity feeds tailored for each role.
+- **Responsive UI/UX**: A modern, mobile-friendly interface built with Tailwind CSS and Shadcn UI components.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 💻 Tech Stack
 
-## Learn More
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Database**: SQLite (Development/Demo) / PostgreSQL (Production)
+- **ORM**: Prisma
+- **Styling**: Tailwind CSS, class-variance-authority
+- **Components**: Radix UI, Lucide Icons, Recharts
+- **Validation**: Zod
+- **Authentication**: Custom Role-based Auth (Extensible to NextAuth/Clerk)
 
-To learn more about Next.js, take a look at the following resources:
+## 📸 Screenshots
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+*(Add screenshots of the Admin Dashboard, Teacher Grading Portal, and Student View here)*
+- `[Screenshot 1 Placeholder]`
+- `[Screenshot 2 Placeholder]`
+- `[Screenshot 3 Placeholder]`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Local Setup Instructions
 
-## Deploy on Vercel
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd school-erp-marksheet
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+3. **Database Configuration:**
+   The project uses SQLite for local development. Ensure your `.env` file contains the correct database URL:
+   ```env
+   DATABASE_URL="file:./dev.db"
+   ```
+
+4. **Initialize the Database:**
+   Apply migrations and seed the database with initial mock data:
+   ```bash
+   npx prisma migrate dev
+   npx prisma db seed
+   ```
+
+5. **Run the Development Server:**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 🌐 Deployment Instructions
+
+The application is optimized for deployment on Vercel. For a demo or showcase deployment, the local SQLite database (`dev.db`) can be committed and deployed alongside the application.
+
+1. **Deploy to Vercel:**
+   - Push your code to a GitHub repository.
+   - Import the project into your Vercel dashboard.
+   - Vercel will automatically detect the Next.js framework and configure the build settings.
+
+2. **Build Configuration:**
+   - **Build Command**: `npm run build`
+   - **Install Command**: `npm install`
+   - **Output Directory**: `.next`
+
+3. **Production Database (Optional):**
+   If deploying for production, replace the SQLite `DATABASE_URL` with a PostgreSQL connection string and run migrations during the build phase.
+
+---
+*Developed with a focus on secure, efficient, and scalable educational management.*

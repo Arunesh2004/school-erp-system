@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { login } from "../actions"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Eye, EyeOff } from "lucide-react"
 
 const formSchema = z.object({
   email: z.string().email({
@@ -32,6 +32,7 @@ const formSchema = z.object({
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -58,30 +59,36 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl text-center">School ERP</CardTitle>
-        <CardDescription className="text-center">
+    <Card className="shadow-lg">
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-2xl text-center font-bold tracking-tight">School ERP</CardTitle>
+        <CardDescription className="text-center text-slate-500">
           Enter your credentials to access your portal
         </CardDescription>
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="mb-4 flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <p>{error}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-md bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <p className="font-medium">{error}</p>
           </div>
         )}
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             <FormField
               control={form.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel className="text-slate-700 dark:text-slate-300">Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="name@example.com" type="email" {...field} disabled={isPending} />
+                    <Input 
+                      placeholder="name@example.com" 
+                      type="email" 
+                      className="bg-slate-50 dark:bg-slate-900"
+                      {...field} 
+                      disabled={isPending} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,15 +99,35 @@ export function LoginForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel className="text-slate-700 dark:text-slate-300">Password</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter your password" type="password" {...field} disabled={isPending} />
+                    <div className="relative">
+                      <Input 
+                        placeholder="Enter your password" 
+                        type={showPassword ? "text" : "password"} 
+                        className="bg-slate-50 dark:bg-slate-900 pr-10"
+                        {...field} 
+                        disabled={isPending} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isPending}>
+            <Button type="submit" className="w-full h-11 text-base font-medium" disabled={isPending}>
               {isPending ? "Signing in..." : "Sign in"}
             </Button>
           </form>

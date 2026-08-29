@@ -1,5 +1,6 @@
 "use server"
 
+import crypto from "crypto"
 import prisma from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
@@ -26,6 +27,7 @@ export async function createStudent(formData: FormData) {
           name: parsed.data.name,
           password,
           role: "STUDENT",
+          mustChangePassword: true,
         }
       })
       const student = await tx.student.create({
@@ -69,6 +71,7 @@ export async function createTeacher(formData: FormData) {
           name: parsed.data.name,
           password,
           role: "TEACHER",
+          mustChangePassword: true,
         }
       })
       await tx.teacher.create({
@@ -377,6 +380,42 @@ export async function transferStudent(studentId: string, newClassId: string) {
   } catch (error: any) {
     console.error(error)
     return { error: error.message || "Failed to transfer student." }
+  }
+}
+
+export async function resetUserPassword(userId: string) {
+  const session = await verifySession()
+  if (!session || session.role !== "ADMIN") return { error: "Unauthorized" }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return { error: "User not found." }
+    
+    // Generate a cryptographically secure one-time 10-character alphanumeric password
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    let tempPasswordStr = ""
+    for (let i = 0; i < 10; i++) {
+      const randomIndex = crypto.randomInt(0, chars.length)
+      tempPasswordStr += chars[randomIndex]
+    }
+
+    const password = await bcrypt.hash(tempPasswordStr, 10)
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        password,
+        mustChangePassword: true,
+      }
+    })
+
+    if (user.role === "STUDENT") revalidatePath("/admin/students")
+    if (user.role === "TEACHER") revalidatePath("/admin/teachers")
+    
+    return { success: true, tempPassword: tempPasswordStr }
+  } catch (error) {
+    console.error(error)
+    return { error: "Failed to reset password." }
   }
 }
 

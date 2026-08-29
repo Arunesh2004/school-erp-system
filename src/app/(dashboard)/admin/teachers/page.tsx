@@ -9,6 +9,7 @@ import { AssignClassModal } from "@/components/dashboard/assign-class-modal"
 import { Badge } from "@/components/ui/badge"
 import { CsvExportButton } from "@/components/dashboard/csv-export-button"
 import { exportAllTeachers } from "@/app/actions/export"
+import { ResetPasswordButton } from "@/components/dashboard/reset-password-button"
 
 export default async function AdminTeachersPage(
   props: { searchParams: Promise<{ q?: string, page?: string }> }
@@ -114,6 +115,7 @@ export default async function AdminTeachersPage(
                         assignedClassId={teacher.classes && teacher.classes.length > 0 ? teacher.classes[0].id : null}
                         classes={classes}
                       />
+                      <ResetPasswordButton userId={teacher.userId} userName={teacher.user.name || "Teacher"} />
                       <DeleteTeacherButton id={teacher.user.id} />
                     </div>
                   </TableCell>

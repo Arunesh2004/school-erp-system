@@ -17,21 +17,30 @@ export async function changePassword(formData: FormData) {
     throw new Error("Passwords do not match.")
   }
 
-  const isDefaultPassword = password === "Student@12345" || password === "Teacher@12345" || password === "Admin@12345"
-  if (isDefaultPassword) {
-    throw new Error("Cannot use a default password.")
-  }
-
-  const session = await verifySession()
+  // Use verifySession(true) to allow accessing the session even if password change is required
+  const session = await verifySession(true)
   if (!session?.userId) {
     throw new Error("Unauthorized")
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: session.userId } })
+  if (!user) {
+    throw new Error("User not found")
+  }
+
+  const isSamePassword = await bcrypt.compare(password, user.password)
+  if (isSamePassword) {
+    throw new Error("New password cannot be the same as the current temporary password.")
   }
 
   const hashedPassword = await bcrypt.hash(password, 10)
 
   await prisma.user.update({
     where: { id: session.userId },
-    data: { password: hashedPassword }
+    data: { 
+      password: hashedPassword,
+      mustChangePassword: false
+    }
   })
 
   // Re-issue session without the needsPasswordChange flag

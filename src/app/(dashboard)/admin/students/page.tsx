@@ -9,6 +9,7 @@ import { DataTableFilter } from "@/components/ui/data-table-filter"
 import { PaginationControls } from "@/components/ui/pagination-controls"
 import { CsvExportButton } from "@/components/dashboard/csv-export-button"
 import { exportAllStudents } from "@/app/actions/export"
+import { ResetPasswordButton } from "@/components/dashboard/reset-password-button"
 
 export default async function AdminStudentsPage(
   props: { searchParams: Promise<{ q?: string, page?: string, classId?: string }> }
@@ -119,6 +120,7 @@ export default async function AdminStudentsPage(
                   </TableCell>
                   <TableCell className="text-right flex items-center justify-end gap-2">
                     <StudentHistoryDialog studentName={student.user.name || "Unknown"} enrollments={student.enrollments} />
+                    <ResetPasswordButton userId={student.user.id} userName={student.user.name || "Student"} />
                     <DeleteStudentButton id={student.user.id} />
                   </TableCell>
                 </TableRow>

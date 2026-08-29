@@ -50,10 +50,10 @@ enum ContentStatus {
 // A student can have multiple records per session (e.g., TRANSFERRED history + ACTIVE)
 // Exactly ONE ACTIVE enrollment per student per session is enforced at application layer.
 enum EnrollmentStatus {
-  ACTIVE      // Current canonical enrollment
+  ACTIVE // Current canonical enrollment
   TRANSFERRED // Historical record — student moved to another class in same session
-  COMPLETED   // Session ended normally (set during promotion)
-  INACTIVE    // Student left school
+  COMPLETED // Session ended normally (set during promotion)
+  INACTIVE // Student left school
 }
 
 // ============================================================
@@ -69,10 +69,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  teacher      Teacher?
-  student      Student?
-  announcements Announcement[]
-  activityLogs  ActivityLog[]
+  teacher         Teacher?
+  student         Student?
+  announcements   Announcement[]
+  activityLogs    ActivityLog[]
+  alerts          Alert[]
+  alertRecipients AlertRecipient[]
 }
 
 model Teacher {
@@ -109,8 +111,8 @@ model Student {
 }
 
 model Class {
-  id   String @id @default(uuid())
-  name String @unique
+  id        String   @id @default(uuid())
+  name      String   @unique
   // LEGACY: Global teacher FK. NOT security authority.
   // Canonical class teacher = ClassTeacherAssignment (ACTIVE, active session)
   teacherId String?
@@ -129,9 +131,9 @@ model Class {
 }
 
 model Subject {
-  id   String @id @default(uuid())
-  name String @unique
-  code String @unique
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
   // LEGACY: Global teacher FK. NOT security authority.
   // Canonical subject teacher = TeachingAssignment (ACTIVE, active session, specific class)
   teacherId String?
@@ -181,12 +183,12 @@ model Mark {
 // ============================================================
 
 model SchoolSettings {
-  id            String  @id @default("default") // Singleton
-  schoolName    String  @default("EduManage Academy")
-  schoolAddress String  @default("123 Education Lane, Learning City")
-  contactNumber String  @default("+1 234 567 8900")
-  principalName String  @default("Dr. Jane Doe")
-  email         String  @default("contact@edumanage.com")
+  id            String @id @default("default") // Singleton
+  schoolName    String @default("EduManage Academy")
+  schoolAddress String @default("123 Education Lane, Learning City")
+  contactNumber String @default("+1 234 567 8900")
+  principalName String @default("Dr. Jane Doe")
+  email         String @default("contact@edumanage.com")
 
   activeSessionId String?
   activeSession   AcademicSession? @relation(fields: [activeSessionId], references: [id])
@@ -252,7 +254,7 @@ model Attendance {
 // ============================================================
 
 model StudentEnrollment {
-  id                String           @id @default(uuid())
+  id                String @id @default(uuid())
   studentId         String
   classId           String
   academicSessionId String
@@ -290,7 +292,7 @@ model StudentAcademicRecord {
   classId           String
   academicSessionId String
 
-  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  academicSession AcademicSession    @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
   enrollmentId    String?
   enrollment      StudentEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
 
@@ -362,11 +364,11 @@ model ActivityLog {
 //
 // Application layer enforces the one-ACTIVE-per-class-per-session invariant.
 model ClassTeacherAssignment {
-  id                String @id @default(uuid())
+  id                String          @id @default(uuid())
   teacherId         String
-  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher           Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   classId           String
-  class             Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class             Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
   academicSessionId String
   academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
 
@@ -396,13 +398,13 @@ model ClassTeacherAssignment {
 //   - New record: isActive=true, assignedAt=now()
 // Both records preserved for historical mark/attendance attribution.
 model TeachingAssignment {
-  id                String @id @default(uuid())
+  id                String          @id @default(uuid())
   teacherId         String
-  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher           Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   subjectId         String
-  subject           Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject           Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   classId           String
-  class             Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class             Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
   academicSessionId String
   academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
 
@@ -524,9 +526,69 @@ model LearningExplanation {
   topicId String        @unique
   topic   LearningTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
   createdBy   String?
   updatedBy   String?
+}
+
+// ============================================================
+// ALERT SYSTEM
+// ============================================================
+
+enum AlertPriority {
+  INFO
+  NOTICE
+  WARNING
+  URGENT
+}
+
+enum AlertStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  CANCELLED
+}
+
+model Alert {
+  id                      String        @id @default(uuid())
+  title                   String
+  message                 String
+  priority                AlertPriority @default(INFO)
+  status                  AlertStatus   @default(PUBLISHED)
+  requiresAcknowledgement Boolean       @default(false)
+
+  creatorId String
+  creator   User   @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+
+  targetType String // e.g. " ALL_STUDENTS\, \ALL_TEACHERS\, \SPECIFIC_CLASSES\, \SPECIFIC_STUDENTS\
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+  expiresAt   DateTime?
+
+  recipients AlertRecipient[]
+
+  @@index([status, expiresAt])
+  @@index([createdAt])
+}
+
+model AlertRecipient {
+  id String @id @default(uuid())
+
+  alertId String
+  alert   Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  readAt         DateTime?
+  acknowledgedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([alertId, userId])
+  @@index([userId, readAt])
 }

@@ -1,14 +1,17 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { LogOut, User as UserIcon } from "lucide-react"
+import { LogOut, User as UserIcon, BellRing } from "lucide-react"
 import { logout } from "@/app/(auth)/login/actions"
 import { MobileNav } from "./mobile-nav"
 
-export function Header({ userName, role, academicSession, schoolName, isClassTeacher }: { userName: string | null, role: "ADMIN" | "TEACHER" | "STUDENT", academicSession: string, schoolName: string, isClassTeacher?: boolean }) {
+export function Header({ userName, role, academicSession, schoolName, isClassTeacher, unreadAlertsCount = 0 }: { userName: string | null, role: "ADMIN" | "TEACHER" | "STUDENT", academicSession: string, schoolName: string, isClassTeacher?: boolean, unreadAlertsCount?: number }) {
   const handleLogout = async () => {
     await logout()
   }
+
+  const alertHref = `/${role.toLowerCase()}/alerts`
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-white/80 backdrop-blur-md px-4 lg:px-8 justify-between sticky top-0 z-50 shadow-sm">
@@ -20,6 +23,13 @@ export function Header({ userName, role, academicSession, schoolName, isClassTea
         </div>
       </div>
       <div className="flex items-center gap-6">
+        <Link href={alertHref} className="relative p-2 text-slate-500 hover:text-slate-900 transition-colors">
+          <BellRing className="h-5 w-5" />
+          {unreadAlertsCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+          )}
+        </Link>
+        <div className="h-6 w-px bg-slate-200 hidden sm:block" />
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end">
             <span className="text-sm font-medium leading-none text-slate-900">{userName || "User"}</span>

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Users, BookOpen, GraduationCap, FileText, Building2, CalendarDays, Bell, Activity } from "lucide-react"
+import { LayoutDashboard, Users, BookOpen, GraduationCap, FileText, Building2, CalendarDays, Bell, Activity, BellRing } from "lucide-react"
 
 type SidebarProps = {
   role: "ADMIN" | "TEACHER" | "STUDENT"
@@ -22,6 +22,7 @@ export function Sidebar({ role, schoolName, isClassTeacher }: SidebarProps) {
       { name: "Classes", href: "/admin/classes", icon: BookOpen },
       { name: "Subjects", href: "/admin/subjects", icon: FileText },
       { name: "Attendance", href: "/admin/attendance", icon: CalendarDays },
+      { name: "Alerts", href: "/admin/alerts", icon: BellRing },
       { name: "Announcements", href: "/admin/announcements", icon: Bell },
       { name: "Activity Log", href: "/admin/activity", icon: Activity },
       { name: "Settings", href: "/admin/settings", icon: Building2 },
@@ -30,11 +31,13 @@ export function Sidebar({ role, schoolName, isClassTeacher }: SidebarProps) {
       { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
       { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
       { name: "Attendance", href: "/teacher/attendance", icon: CalendarDays },
+      { name: "Alerts", href: "/teacher/alerts", icon: BellRing },
       { name: "Enter Marks", href: "/teacher/marks", icon: FileText },
       { name: "Notes & Hub", href: "/teacher/notes", icon: BookOpen },
     ],
     STUDENT: [
       { name: "Dashboard", href: "/student", icon: LayoutDashboard },
+      { name: "Inbox", href: "/student/alerts", icon: BellRing },
       { name: "My Results", href: "/student/results", icon: FileText },
       { name: "Learning Hub", href: "/student/learning-hub", icon: BookOpen },
     ],

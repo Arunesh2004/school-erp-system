@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, BookOpen, GraduationCap, Activity, CheckCircle, Clock } from "lucide-react"
+import { Users, BookOpen, GraduationCap, Activity, CheckCircle, Clock, FileText } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { AdminCharts } from "@/components/dashboard/admin-charts"
@@ -174,8 +174,12 @@ export default async function AdminDashboard() {
             <TableBody>
               {recentMarks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500 py-8">
-                    No recent marks activity.
+                  <TableCell colSpan={6} className="h-48 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-500">
+                      <FileText className="h-10 w-10 text-slate-300 mb-3" />
+                      <p className="font-medium text-slate-700">No marks recorded yet</p>
+                      <p className="text-sm mt-1">When teachers publish marks, they will appear here.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (

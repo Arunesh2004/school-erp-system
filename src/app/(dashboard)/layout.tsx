@@ -79,7 +79,7 @@ export default async function DashboardLayout({
           isClassTeacher={isClassTeacher} 
           unreadAlertsCount={unreadAlertsCount}
         />
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+        <main className="flex flex-1 flex-col gap-6 p-4 lg:gap-8 lg:p-8 bg-slate-50/40 dark:bg-transparent">
           {children}
         </main>
       </div>

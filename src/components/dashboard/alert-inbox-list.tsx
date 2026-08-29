@@ -46,10 +46,14 @@ export function AlertInboxList({ initialAlerts }: AlertInboxListProps) {
 
   if (initialAlerts.length === 0) {
     return (
-      <div className="rounded-xl border bg-white p-12 text-center text-slate-500 shadow-sm flex flex-col items-center justify-center">
-        <BellRing className="h-12 w-12 text-slate-300 mb-4" />
-        <h3 className="text-lg font-medium text-slate-900 mb-1">You're all caught up!</h3>
-        <p>No new alerts in your inbox.</p>
+      <div className="rounded-xl border border-slate-200 border-dashed bg-slate-50/50 p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+        <div className="h-16 w-16 bg-blue-50 text-blue-400 rounded-full flex items-center justify-center mb-4">
+          <BellRing className="h-8 w-8" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">You're all caught up</h3>
+        <p className="text-sm text-slate-500 max-w-sm">
+          There are currently no active alerts requiring your attention. We'll notify you when something important comes up.
+        </p>
       </div>
     )
   }

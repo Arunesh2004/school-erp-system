@@ -4,36 +4,45 @@ import prisma from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { verifySession } from "@/lib/auth/session"
 import { logActivity } from "./logging"
+import { assertClassTeacherOwnership, validateAttendanceRoster, requireActiveSessionId } from "@/lib/auth/teacher-authorization"
 
-export async function upsertAttendance(data: { studentId: string, classId: string, date: string, status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED", remarks?: string }) {
+export async function upsertAttendance(data: { studentId: string, classId: string, date: string, status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED", remarks?: string, expectedSessionId?: string }) {
   const session = await verifySession()
   if (!session || (session.role !== "TEACHER" && session.role !== "ADMIN")) {
     return { error: "Unauthorized" }
   }
 
-  // Find teacher if role is TEACHER to attach teacherId
+  const activeSessionId = await requireActiveSessionId()
+  if (data.expectedSessionId && data.expectedSessionId !== activeSessionId) {
+    return { error: "The active academic session has changed. Please reload the page." }
+  }
+
   let teacherId = null
   if (session.role === "TEACHER") {
     const teacher = await prisma.teacher.findUnique({ where: { userId: session.userId } })
     if (!teacher) return { error: "Teacher profile not found" }
     teacherId = teacher.id
+
+    try {
+      await assertClassTeacherOwnership(teacherId, data.classId, activeSessionId)
+    } catch (e: any) {
+      return { error: e.message }
+    }
   } else {
-    // Admin override (requires a teacher assigned to class)
-    const cls = await prisma.class.findUnique({ where: { id: data.classId } })
-    if (!cls?.teacherId) return { error: "Class has no assigned teacher to record attendance against." }
-    teacherId = cls.teacherId
+    // Admin override: we find the ACTIVE class teacher for the session to record attendance against
+    const assignment = await prisma.classTeacherAssignment.findFirst({ 
+      where: { classId: data.classId, academicSessionId: activeSessionId, isActive: true } 
+    })
+    if (!assignment) return { error: "Class has no active class teacher for the current session to record attendance against." }
+    teacherId = assignment.teacherId
   }
 
   try {
-    const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" }, include: { activeSession: true } })
-    const activeSessionName = settings?.activeSession?.name
-    if (activeSessionName) {
-      const record = await prisma.studentAcademicRecord.findUnique({
-        where: { studentId_academicSession: { studentId: data.studentId, academicSession: activeSessionName } }
-      })
-      if (record?.status === "FINALIZED") {
-        return { error: "Academic record is finalized and immutable." }
-      }
+    const record = await prisma.studentAcademicRecord.findUnique({
+      where: { studentId_academicSessionId: { studentId: data.studentId, academicSessionId: activeSessionId } }
+    })
+    if (record?.status === "FINALIZED") {
+      return { error: "Academic record is finalized and immutable." }
     }
 
     const attendanceDate = new Date(data.date)
@@ -56,7 +65,8 @@ export async function upsertAttendance(data: { studentId: string, classId: strin
         teacherId: teacherId,
         date: attendanceDate,
         status: data.status,
-        remarks: data.remarks
+        remarks: data.remarks,
+        academicSessionId: activeSessionId
       }
     })
 
@@ -73,7 +83,7 @@ export async function upsertAttendance(data: { studentId: string, classId: strin
   }
 }
 
-export async function bulkMarkPresent(classId: string, date: string, studentIds: string[]) {
+export async function bulkMarkPresent(classId: string, date: string, studentIds: string[], expectedSessionId?: string) {
   const session = await verifySession()
   if (!session || session.role !== "TEACHER") {
     return { error: "Unauthorized" }
@@ -82,25 +92,31 @@ export async function bulkMarkPresent(classId: string, date: string, studentIds:
   const teacher = await prisma.teacher.findUnique({ where: { userId: session.userId } })
   if (!teacher) return { error: "Teacher profile not found" }
 
+  const activeSessionId = await requireActiveSessionId()
+  if (expectedSessionId && expectedSessionId !== activeSessionId) {
+    return { error: "The active academic session has changed. Please reload the page." }
+  }
+
+  try {
+    await assertClassTeacherOwnership(teacher.id, classId, activeSessionId)
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
   try {
     const attendanceDate = new Date(date)
     attendanceDate.setHours(0, 0, 0, 0)
 
     // Ensure all target students belong to the class
-    const studentsInClass = await prisma.student.findMany({
-      where: { id: { in: studentIds }, classId: classId }
-    })
+    const { validStudentIds } = await validateAttendanceRoster(studentIds, classId, activeSessionId)
     
-    if (studentsInClass.length === 0) return { error: "No valid students found" }
+    if (validStudentIds.length === 0) return { error: "No valid students found" }
 
-    const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" }, include: { activeSession: true } })
-    const activeSessionName = settings?.activeSession?.name
-    
-    if (activeSessionName) {
+    if (activeSessionId) {
       const finalizedRecords = await prisma.studentAcademicRecord.count({
         where: {
-          studentId: { in: studentsInClass.map(s => s.id) },
-          academicSession: activeSessionName,
+          studentId: { in: validStudentIds },
+          academicSessionId: activeSessionId,
           status: "FINALIZED"
         }
       })
@@ -111,11 +127,11 @@ export async function bulkMarkPresent(classId: string, date: string, studentIds:
 
     // Execute in transaction
     await prisma.$transaction(
-      studentsInClass.map((student) => 
+      validStudentIds.map((sid) => 
         prisma.attendance.upsert({
           where: {
             studentId_date: {
-              studentId: student.id,
+              studentId: sid,
               date: attendanceDate
             }
           },
@@ -123,17 +139,18 @@ export async function bulkMarkPresent(classId: string, date: string, studentIds:
             status: "PRESENT"
           },
           create: {
-            studentId: student.id,
+            studentId: sid,
             classId: classId,
             teacherId: teacher.id,
             date: attendanceDate,
-            status: "PRESENT"
+            status: "PRESENT",
+            academicSessionId: activeSessionId
           }
         })
       )
     )
 
-    await logActivity("BULK_ATTENDANCE", "Attendance", classId, `Bulk marked present for ${studentsInClass.length} students on ${attendanceDate.toISOString().split('T')[0]}`, session.userId)
+    await logActivity("BULK_ATTENDANCE", "Attendance", classId, `Bulk marked present for ${validStudentIds.length} students on ${attendanceDate.toISOString().split('T')[0]}`, session.userId)
 
     revalidatePath("/teacher/attendance")
     revalidatePath("/admin/attendance")

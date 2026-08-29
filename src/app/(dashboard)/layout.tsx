@@ -15,6 +15,10 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
+  if (session.needsPasswordChange) {
+    redirect('/change-password')
+  }
+
   const dbUser = await prisma.user.findUnique({
     where: { id: session.userId },
     include: {
@@ -53,7 +57,7 @@ export default async function DashboardLayout({
         <Sidebar role={dbUser.role} schoolName={schoolName} isClassTeacher={isClassTeacher} />
       </div>
       <div className="flex flex-col">
-        <Header userName={dbUser.name || dbUser.email} role={dbUser.role} academicSession={activeSessionName} />
+        <Header userName={dbUser.name || dbUser.email} role={dbUser.role} academicSession={activeSessionName} schoolName={schoolName} isClassTeacher={isClassTeacher} />
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
           {children}
         </main>

@@ -18,28 +18,35 @@ export async function createSession(data: { name: string; startDate: Date; endDa
   const user = await prisma.user.findUnique({ where: { id: sessionUser.userId } });
   if (user?.role !== "ADMIN") throw new Error("Forbidden");
 
-  // Create as ARCHIVED by default, they must manually activate it
-  const session = await prisma.academicSession.create({
-    data: {
-      name: data.name,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      status: "ARCHIVED",
-    },
-  });
+  try {
+    // Create as ARCHIVED by default, they must manually activate it
+    const session = await prisma.academicSession.create({
+      data: {
+        name: data.name,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: "ARCHIVED",
+      },
+    });
 
-  await prisma.activityLog.create({
-    data: {
-      action: "SESSION_CREATED",
-      entityType: "AcademicSession",
-      entityId: session.id,
-      details: JSON.stringify({ name: session.name }),
-      actorId: user.id,
-    },
-  });
+    await prisma.activityLog.create({
+      data: {
+        action: "SESSION_CREATED",
+        entityType: "AcademicSession",
+        entityId: session.id,
+        details: JSON.stringify({ name: session.name }),
+        actorId: user.id,
+      },
+    });
 
-  revalidatePath("/admin/academic-session");
-  return session;
+    revalidatePath("/admin/academic-session");
+    return session;
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      throw new Error(`A session with the name "${data.name}" already exists.`);
+    }
+    throw error;
+  }
 }
 
 export async function activateSession(id: string) {
@@ -102,7 +109,7 @@ export async function archiveSession(id: string) {
   // block archival if draft reports exist, unpublished academic records exist
   const unfinalizedRecords = await prisma.studentAcademicRecord.count({
     where: {
-      academicSession: session.name,
+      academicSessionId: session.id,
       status: { in: ["DRAFT", "PUBLISHED"] },
     },
   });

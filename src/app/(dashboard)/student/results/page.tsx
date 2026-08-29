@@ -7,14 +7,16 @@ import Link from "next/link"
 
 export default async function StudentResultsPage() {
   const session = await verifySession()
+  if (!session?.userId) return <div>Unauthorized</div>
   const studentUser = await prisma.user.findUnique({
-    where: { id: session?.userId },
+    where: { id: session.userId },
     include: { 
       student: {
         include: {
           class: true,
           academicRecords: {
-            orderBy: { academicSession: 'desc' }
+            orderBy: { academicSession: { startDate: 'desc' } },
+            include: { academicSession: true, class: true }
           }
         }
       } 
@@ -49,9 +51,9 @@ export default async function StudentResultsPage() {
                       {isFinalized ? "Finalized" : "Published"}
                     </span>
                   </div>
-                  <CardTitle className="text-xl mt-4">Session {record.academicSession}</CardTitle>
+                  <CardTitle className="text-xl mt-4">Session {record.academicSession.name}</CardTitle>
                   <CardDescription className="flex items-center gap-1.5 mt-1">
-                    <Calendar className="w-4 h-4" /> Class: {student.class?.name || "Unassigned"}
+                    <Calendar className="w-4 h-4" /> Class: {record.class?.name || "Unassigned"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 flex-1 flex flex-col justify-between">

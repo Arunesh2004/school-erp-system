@@ -7,11 +7,12 @@ const key = new TextEncoder().encode(secretKey)
 type SessionPayload = {
   userId: string
   role: string
+  needsPasswordChange?: boolean
   expiresAt: Date
 }
 
 export async function encrypt(payload: SessionPayload) {
-  return new SignJWT(payload)
+  return new SignJWT(payload as any)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("24h")
@@ -29,9 +30,9 @@ export async function decrypt(session: string | undefined = "") {
   }
 }
 
-export async function createSession(userId: string, role: string) {
+export async function createSession(userId: string, role: string, needsPasswordChange: boolean = false) {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
-  const session = await encrypt({ userId, role, expiresAt })
+  const session = await encrypt({ userId, role, needsPasswordChange, expiresAt })
   const cookieStore = await cookies()
 
   cookieStore.set("session", session, {
@@ -55,7 +56,7 @@ export async function verifySession(token?: string) {
     return null
   }
 
-  return { isAuth: true, userId: session.userId, role: session.role }
+  return { isAuth: true, userId: session.userId, role: session.role, needsPasswordChange: session.needsPasswordChange }
 }
 
 export async function deleteSession() {

@@ -1,11 +1,13 @@
 import prisma from "@/lib/prisma"
 import { verifySession } from "@/lib/auth/session"
+import { getClassTeacherClassIds } from "@/lib/auth/teacher-authorization"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { buttonVariants } from "@/components/ui/button"
 import { Users, Percent, Award, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { CsvExportButton } from "@/components/dashboard/csv-export-button"
 
 export default async function ClassTeacherPage() {
   const session = await verifySession()
@@ -20,22 +22,44 @@ export default async function ClassTeacherPage() {
     redirect('/login')
   }
 
-  // Detect Class Ownership
-  const teacherClass = await prisma.class.findFirst({
-    where: { teacherId: dbUser.teacher.id },
-    include: {
-      students: {
-        select: {
-          id: true,
-          rollNumber: true,
-          user: { select: { name: true, email: true } },
-          attendance: { select: { status: true } },
-          marks: { select: { score: true, maxScore: true } }
-        },
-        orderBy: { user: { name: 'asc' } }
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionId = settings?.activeSessionId
+
+  if (!activeSessionId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center bg-white rounded-lg border border-slate-200 shadow-sm p-8">
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">No Active Session</h2>
+        <p className="text-slate-500 max-w-md">An administrator must set an active academic session before viewing class statistics.</p>
+      </div>
+    )
+  }
+
+  const authorizedClassIds = await getClassTeacherClassIds(dbUser.teacher.id, activeSessionId)
+  
+  let teacherClass = null;
+  if (authorizedClassIds.length > 0) {
+    teacherClass = await prisma.class.findFirst({
+      where: { id: { in: authorizedClassIds } },
+      include: {
+        students: {
+          select: {
+            id: true,
+            rollNumber: true,
+            user: { select: { name: true, email: true } },
+            attendance: { 
+              where: { academicSessionId: activeSessionId },
+              select: { status: true } 
+            },
+            marks: { 
+              where: { academicSessionId: activeSessionId },
+              select: { score: true, maxScore: true } 
+            }
+          },
+          orderBy: { user: { name: 'asc' } }
+        }
       }
-    }
-  })
+    })
+  }
 
   if (!teacherClass) {
     return (
@@ -98,6 +122,22 @@ export default async function ClassTeacherPage() {
     ? Math.round((totalScore / totalMaxScore) * 100) 
     : 0
 
+  const exportData = studentsWithStats.map(student => ({
+    rollNumber: student.rollNumber || "N/A",
+    name: student.user.name || "Unknown",
+    email: student.user.email,
+    attendance: `${student.attendancePercent}%`,
+    grade: `${student.gradePercent}%`
+  }))
+
+  const exportColumns = [
+    { header: "Roll No.", key: "rollNumber" },
+    { header: "Student Name", key: "name" },
+    { header: "Email", key: "email" },
+    { header: "Attendance", key: "attendance" },
+    { header: "Overall Grade", key: "grade" }
+  ]
+
   return (
     <div className="space-y-6">
       <div>
@@ -140,8 +180,9 @@ export default async function ClassTeacherPage() {
 
       {/* Student List */}
       <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
           <h2 className="font-semibold text-slate-800">Student Directory</h2>
+          <CsvExportButton data={exportData} filename={`Class_${teacherClass.name.replace(/\s+/g, '_')}_Roster`} columns={exportColumns} />
         </div>
         <Table>
           <TableHeader>

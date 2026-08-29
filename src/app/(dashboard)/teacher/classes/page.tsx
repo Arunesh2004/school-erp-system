@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { verifySession } from "@/lib/auth/session"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getClassTeacherClassIds, getSubjectTeacherClassIds } from "@/lib/auth/teacher-authorization"
 
 export default async function TeacherClassesPage() {
   const session = await verifySession()
@@ -11,14 +12,34 @@ export default async function TeacherClassesPage() {
   
   if (!teacherUser?.teacher) return <div>Unauthorized</div>
 
-  const classes = await prisma.class.findMany({
-    where: { teacherId: teacherUser.teacher.id },
-    include: {
-      students: {
-        include: { user: true }
-      }
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionId = settings?.activeSessionId
+
+  let classes: any[] = [];
+  if (activeSessionId) {
+    const classTeacherClassIds = await getClassTeacherClassIds(teacherUser.teacher.id, activeSessionId);
+    const subjectTeacherClassIds = await getSubjectTeacherClassIds(teacherUser.teacher.id, activeSessionId);
+    const allAuthorizedClassIds = [...new Set([...classTeacherClassIds, ...subjectTeacherClassIds])];
+
+    if (allAuthorizedClassIds.length > 0) {
+      classes = await prisma.class.findMany({
+        where: { id: { in: allAuthorizedClassIds } },
+        include: {
+          students: {
+            where: {
+              enrollments: {
+                some: {
+                  academicSessionId: activeSessionId,
+                  status: 'ACTIVE'
+                }
+              }
+            },
+            include: { user: true }
+          }
+        }
+      });
     }
-  })
+  }
 
   return (
     <div className="space-y-6">
@@ -49,7 +70,7 @@ export default async function TeacherClassesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (Array.isArray(cls.students) ? cls.students : []).map((student) => (
+                  (Array.isArray(cls.students) ? cls.students : []).map((student: any) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">{student.user.name || "Unknown Student"}</TableCell>
                       <TableCell>{student.user.email}</TableCell>

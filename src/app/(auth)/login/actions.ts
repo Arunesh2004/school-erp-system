@@ -22,7 +22,10 @@ export async function login(formData: FormData) {
     return { error: "Invalid credentials." }
   }
 
-  await createSession(user.id, user.role)
+  const isDefaultPassword = password === "Student@12345" || password === "Teacher@12345" || password === "Admin@12345"
+  await createSession(user.id, user.role, isDefaultPassword)
+
+  if (isDefaultPassword) redirect("/change-password")
 
   if (user.role === "ADMIN") redirect("/admin")
   if (user.role === "TEACHER") redirect("/teacher")

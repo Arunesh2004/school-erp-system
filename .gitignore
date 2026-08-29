@@ -41,3 +41,4 @@ dev.db-journal
 next-env.d.ts
 
 /src/generated/prisma
+backup-pre-phase3.json 

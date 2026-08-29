@@ -25,9 +25,10 @@ interface InlineMarkRowProps {
   mark: MarkData
   isSelected: boolean
   onToggleSelect: (id: string) => void
+  activeSessionId: string
 }
 
-export function InlineMarkRow({ mark, isSelected, onToggleSelect }: InlineMarkRowProps) {
+export function InlineMarkRow({ mark, isSelected, onToggleSelect, activeSessionId }: InlineMarkRowProps) {
   const [isPending, startTransition] = useTransition()
   
   // Local state for optimistic updates
@@ -53,6 +54,7 @@ export function InlineMarkRow({ mark, isSelected, onToggleSelect }: InlineMarkRo
       formData.append("examType", mark.examType)
       formData.append("score", numScore.toString())
       formData.append("status", status)
+      formData.append("expectedSessionId", activeSessionId)
 
       const result = await upsertMark(formData)
       if (result.error) {
@@ -127,6 +129,7 @@ export function InlineMarkRow({ mark, isSelected, onToggleSelect }: InlineMarkRo
               formData.append("examType", mark.examType)
               formData.append("score", score)
               formData.append("status", newStatus)
+              formData.append("expectedSessionId", activeSessionId)
               const result = await upsertMark(formData)
               if (result.error) {
                 toast.error(result.error)

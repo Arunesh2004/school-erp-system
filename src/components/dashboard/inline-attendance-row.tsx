@@ -14,7 +14,7 @@ type StudentWithAttendance = Student & {
   attendance: Attendance[]
 }
 
-export function InlineAttendanceRow({ student, classId, date }: { student: StudentWithAttendance, classId: string, date: string }) {
+export function InlineAttendanceRow({ student, classId, date, activeSessionId }: { student: StudentWithAttendance, classId: string, date: string, activeSessionId: string }) {
   const [isPending, startTransition] = useTransition()
   
   const existingRecord = student.attendance[0]
@@ -47,7 +47,8 @@ export function InlineAttendanceRow({ student, classId, date }: { student: Stude
         classId,
         date,
         status: saveStatus,
-        remarks: saveRemarks
+        remarks: saveRemarks,
+        expectedSessionId: activeSessionId
       })
       if (result.error) {
         toast.error(result.error)

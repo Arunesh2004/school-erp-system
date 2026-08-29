@@ -5,6 +5,8 @@ import { ClassForm } from "./class-form"
 import { DeleteClassButton } from "./delete-class"
 import { DataTableSearch } from "@/components/ui/data-table-search"
 import { PaginationControls } from "@/components/ui/pagination-controls"
+import { CsvExportButton } from "@/components/dashboard/csv-export-button"
+import { exportAllClasses } from "@/app/actions/export"
 
 export default async function AdminClassesPage(
   props: { searchParams: Promise<{ q?: string, page?: string }> }
@@ -34,11 +36,30 @@ export default async function AdminClassesPage(
 
   const mappedTeachers = (Array.isArray(teachers) ? teachers : []).map(t => ({ id: t.id, name: t.user.name }))
 
+  const exportData = classes.map(cls => ({
+    name: cls.name,
+    teacher: cls.teacher?.user.name || "Unassigned",
+  }))
+
+  const exportColumns = [
+    { header: "Class Name", key: "name" },
+    { header: "Class Teacher", key: "teacher" }
+  ]
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manage Classes</h1>
-        <ClassForm teachers={mappedTeachers} />
+        <div className="flex items-center gap-3">
+          <CsvExportButton
+            data={exportData as Record<string, unknown>[]}
+            filename="Classes_Export"
+            columns={exportColumns}
+            fetchAllAction={exportAllClasses.bind(null) as any}
+            label="Export All Classes"
+          />
+          <ClassForm teachers={mappedTeachers} />
+        </div>
       </div>
 
       <div className="flex items-center gap-4 bg-white p-4 rounded-md shadow-sm border border-slate-200">

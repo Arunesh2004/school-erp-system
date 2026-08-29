@@ -20,7 +20,7 @@ interface MarkData {
   subject: { name: string }
 }
 
-export function TeacherMarksTable({ marks }: { marks: MarkData[] }) {
+export function TeacherMarksTable({ marks, activeSessionId }: { marks: MarkData[], activeSessionId: string }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
 
@@ -118,12 +118,13 @@ export function TeacherMarksTable({ marks }: { marks: MarkData[] }) {
               </TableRow>
             ) : (
               marks.map((mark) => (
-                <InlineMarkRow 
-                  key={mark.id} 
-                  mark={mark} 
-                  isSelected={selectedIds.has(mark.id)}
-                  onToggleSelect={handleToggleSelect}
-                />
+                  <InlineMarkRow 
+                    key={mark.id} 
+                    mark={mark} 
+                    isSelected={selectedIds.has(mark.id)}
+                    onToggleSelect={handleToggleSelect}
+                    activeSessionId={activeSessionId}
+                  />
               ))
             )}
           </TableBody>

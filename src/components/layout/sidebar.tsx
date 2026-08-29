@@ -31,10 +31,12 @@ export function Sidebar({ role, schoolName, isClassTeacher }: SidebarProps) {
       { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
       { name: "Attendance", href: "/teacher/attendance", icon: CalendarDays },
       { name: "Enter Marks", href: "/teacher/marks", icon: FileText },
+      { name: "Notes & Hub", href: "/teacher/notes", icon: BookOpen },
     ],
     STUDENT: [
       { name: "Dashboard", href: "/student", icon: LayoutDashboard },
       { name: "My Results", href: "/student/results", icon: FileText },
+      { name: "Learning Hub", href: "/student/learning-hub", icon: BookOpen },
     ],
   }
 

@@ -3,10 +3,12 @@ import { Prisma } from "@prisma/client"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StudentForm } from "./student-form"
 import { DeleteStudentButton } from "./delete-student"
+import { StudentHistoryDialog } from "./student-history"
 import { DataTableSearch } from "@/components/ui/data-table-search"
 import { DataTableFilter } from "@/components/ui/data-table-filter"
 import { PaginationControls } from "@/components/ui/pagination-controls"
 import { CsvExportButton } from "@/components/dashboard/csv-export-button"
+import { exportAllStudents } from "@/app/actions/export"
 
 export default async function AdminStudentsPage(
   props: { searchParams: Promise<{ q?: string, page?: string, classId?: string }> }
@@ -23,7 +25,9 @@ export default async function AdminStudentsPage(
     }
   }
 
-  if (classId !== "all") {
+  if (classId === "unassigned") {
+    whereCondition.classId = null
+  } else if (classId !== "all") {
     whereCondition.classId = classId
   }
 
@@ -33,6 +37,10 @@ export default async function AdminStudentsPage(
       include: {
         user: true,
         class: true,
+        enrollments: {
+          include: { academicSession: true, class: true },
+          orderBy: { academicSession: { startDate: 'desc' } }
+        }
       },
       orderBy: { user: { name: 'asc' } },
       skip: (page - 1) * pageSize,
@@ -42,7 +50,10 @@ export default async function AdminStudentsPage(
     prisma.class.findMany({ orderBy: { name: 'asc' } })
   ])
 
-  const classOptions = (Array.isArray(classes) ? classes : []).map(c => ({ label: c.name, value: c.id }))
+  const classOptions = [
+    { label: "Unassigned", value: "unassigned" },
+    ...(Array.isArray(classes) ? classes : []).map(c => ({ label: c.name, value: c.id }))
+  ]
 
   const exportData = (Array.isArray(students) ? students : []).map(student => ({
     name: student.user.name,
@@ -63,7 +74,13 @@ export default async function AdminStudentsPage(
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manage Students</h1>
         <div className="flex items-center gap-3">
-          <CsvExportButton data={exportData} filename="Students_Export" columns={exportColumns} />
+          <CsvExportButton
+            data={exportData as Record<string, unknown>[]}
+            filename="Students_Export"
+            columns={exportColumns}
+            fetchAllAction={exportAllStudents.bind(null, classId) as any}
+            label="Export All Students"
+          />
           <StudentForm classes={classes} />
         </div>
       </div>
@@ -100,7 +117,8 @@ export default async function AdminStudentsPage(
                       {student.class?.name || "Unassigned"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right flex items-center justify-end gap-2">
+                    <StudentHistoryDialog studentName={student.user.name || "Unknown"} enrollments={student.enrollments} />
                     <DeleteStudentButton id={student.user.id} />
                   </TableCell>
                 </TableRow>

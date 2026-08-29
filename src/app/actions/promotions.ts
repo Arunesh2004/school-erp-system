@@ -19,20 +19,22 @@ export async function getPromotionEligibility(sourceClassId: string): Promise<Pr
   const session = await verifySession();
   if (!session || session.role !== "ADMIN") throw new Error("Unauthorized");
 
-  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" }, include: { activeSession: true } });
-  const activeSessionName = settings?.activeSession?.name;
-  if (!activeSessionName) throw new Error("No active academic session found.");
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } });
+  const activeSessionId = settings?.activeSessionId;
+  if (!activeSessionId) throw new Error("No active academic session found.");
 
   const students = await prisma.student.findMany({
     where: { classId: sourceClassId },
     include: {
       user: true,
-      attendance: true,
+      attendance: {
+        where: { academicSessionId: activeSessionId }
+      },
       marks: {
-        where: { status: "PUBLISHED" }
+        where: { status: "PUBLISHED", academicSessionId: activeSessionId }
       },
       academicRecords: {
-        where: { academicSession: activeSessionName }
+        where: { academicSessionId: activeSessionId }
       }
     }
   });
@@ -70,19 +72,64 @@ export async function getPromotionEligibility(sourceClassId: string): Promise<Pr
   });
 }
 
-export async function promoteStudents(studentIds: string[], destinationClassId: string) {
+export async function promoteStudents(studentIds: string[], destinationClassId: string, expectedSessionId?: string) {
   const session = await verifySession();
   if (!session || session.role !== "ADMIN") throw new Error("Unauthorized");
-
-  // Note: Future technical debt - Implement StudentEnrollment model for strict historical class tracking.
-  // Currently we just update the student.classId
 
   const targetClass = await prisma.class.findUnique({ where: { id: destinationClassId } });
   if (!targetClass) throw new Error("Destination class not found");
 
-  await prisma.student.updateMany({
-    where: { id: { in: studentIds } },
-    data: { classId: destinationClassId }
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" }, include: { activeSession: true } });
+  const activeSession = settings?.activeSession;
+  if (!activeSession) throw new Error("No active academic session found.");
+
+  if (expectedSessionId && expectedSessionId !== activeSession.id) {
+    throw new Error("The active academic session has changed. Please reload the page.");
+  }
+
+  // Find the next session created by the admin to use as destination
+  const nextSession = await prisma.academicSession.findFirst({
+    where: { startDate: { gt: activeSession.startDate } },
+    orderBy: { startDate: 'asc' }
+  });
+
+  if (!nextSession) {
+    throw new Error("Please create the next academic session in settings before promoting students.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Update the student current class pointer
+    await tx.student.updateMany({
+      where: { id: { in: studentIds } },
+      data: { classId: destinationClassId }
+    });
+
+    // 2. Upsert enrollment to prevent duplicates and preserve history
+    for (const studentId of studentIds) {
+      const existingEnrollment = await tx.studentEnrollment.findFirst({
+        where: {
+          studentId,
+          academicSessionId: nextSession.id,
+          status: "ACTIVE"
+        }
+      });
+
+      if (existingEnrollment) {
+        await tx.studentEnrollment.update({
+          where: { id: existingEnrollment.id },
+          data: { classId: destinationClassId }
+        });
+      } else {
+        await tx.studentEnrollment.create({
+          data: {
+            studentId,
+            classId: destinationClassId,
+            academicSessionId: nextSession.id,
+            status: "ACTIVE"
+          }
+        });
+      }
+    }
   });
 
   await prisma.activityLog.create({

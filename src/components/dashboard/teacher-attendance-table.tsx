@@ -20,7 +20,7 @@ type ClassWithStudents = Class & {
   students: StudentWithAttendance[]
 }
 
-export function TeacherAttendanceTable({ classData, selectedDate }: { classData: ClassWithStudents, selectedDate: string }) {
+export function TeacherAttendanceTable({ classData, selectedDate, activeSessionId }: { classData: ClassWithStudents, selectedDate: string, activeSessionId: string }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(selectedDate)
@@ -36,7 +36,7 @@ export function TeacherAttendanceTable({ classData, selectedDate }: { classData:
   const handleMarkAllPresent = () => {
     const studentIds = classData.students.map((s) => s.id)
     startTransition(async () => {
-      const res = await bulkMarkPresent(classData.id, date, studentIds)
+      const res = await bulkMarkPresent(classData.id, date, studentIds, activeSessionId)
       if (res.error) {
         toast.error(res.error)
       } else {
@@ -98,6 +98,7 @@ export function TeacherAttendanceTable({ classData, selectedDate }: { classData:
                   student={student} 
                   classId={classData.id} 
                   date={date} 
+                  activeSessionId={activeSessionId}
                 />
               ))
             )}

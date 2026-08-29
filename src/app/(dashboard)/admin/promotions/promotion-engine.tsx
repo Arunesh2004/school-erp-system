@@ -10,7 +10,7 @@ import { getPromotionEligibility, promoteStudents, PromotionStudentData } from "
 import { toast } from "sonner"
 import { ArrowRight, AlertTriangle, UserCheck, UserX, UserMinus, ShieldCheck } from "lucide-react"
 
-export function PromotionEngine({ classes }: { classes: Class[] }) {
+export function PromotionEngine({ classes, activeSessionId }: { classes: Class[], activeSessionId: string }) {
   const [sourceClassId, setSourceClassId] = useState("")
   const [destClassId, setDestClassId] = useState("")
   const [students, setStudents] = useState<PromotionStudentData[]>([])
@@ -64,7 +64,7 @@ export function PromotionEngine({ classes }: { classes: Class[] }) {
 
     startTransition(async () => {
       try {
-        await promoteStudents(Array.from(selectedStudents), destClassId)
+        await promoteStudents(Array.from(selectedStudents), destClassId, activeSessionId)
         toast.success(`Successfully promoted ${selectedStudents.size} students.`)
         
         // Refresh data
@@ -202,9 +202,15 @@ export function PromotionEngine({ classes }: { classes: Class[] }) {
 
           {/* Action Bar */}
           <div className="p-4 border-t bg-slate-50 flex items-center justify-between">
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 max-w-lg">
+              <p className="font-medium text-slate-700 mb-1">Promotion Workflow:</p>
+              <ul className="list-disc pl-4 space-y-1 text-xs">
+                <li>Historical enrollment and marks are preserved in the current session.</li>
+                <li>A new StudentEnrollment is created for the next session.</li>
+                <li>The student's current class pointer is safely updated.</li>
+              </ul>
               {students.filter(s => s.eligibility !== "ELIGIBLE").length > 0 && (
-                <span className="flex items-center text-orange-600">
+                <span className="flex items-center text-orange-600 mt-2 font-medium">
                   <AlertTriangle className="w-4 h-4 mr-1" />
                   Some students require review.
                 </span>

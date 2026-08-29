@@ -1,11 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "sqlite"
 }
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 enum Role {
   ADMIN
@@ -29,6 +33,33 @@ enum AcademicRecordStatus {
   FINALIZED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// NEW: Lifecycle status for student enrollments
+// A student can have multiple records per session (e.g., TRANSFERRED history + ACTIVE)
+// Exactly ONE ACTIVE enrollment per student per session is enforced at application layer.
+enum EnrollmentStatus {
+  ACTIVE      // Current canonical enrollment
+  TRANSFERRED // Historical record — student moved to another class in same session
+  COMPLETED   // Session ended normally (set during promotion)
+  INACTIVE    // Student left school
+}
+
+// ============================================================
+// CORE USER MODELS
+// ============================================================
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -38,9 +69,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  teacher   Teacher?
-  student   Student?
-
+  teacher      Teacher?
+  student      Student?
   announcements Announcement[]
   activityLogs  ActivityLog[]
 }
@@ -50,113 +80,166 @@ model Teacher {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  classes    Class[]
-  subjects   Subject[]
-  marksGiven Mark[]
-  attendance Attendance[]
+  // Legacy relations (kept for display/compat — NOT security authority)
+  classes          Class[]
+  subjects         Subject[]
+  marksGiven       Mark[]
+  attendance       Attendance[]
+  learningChapters LearningChapter[]
+
+  // CANONICAL: New assignment relations
+  classTeacherAssignments ClassTeacherAssignment[]
+  teachingAssignments     TeachingAssignment[]
 }
 
 model Student {
   id         String  @id @default(uuid())
   userId     String  @unique
   user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // LEGACY: Global mutable class pointer. NOT security authority.
+  // Kept for backward compat display only. Canonical class = StudentEnrollment.classId (ACTIVE)
   classId    String?
   class      Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
   rollNumber String?
 
-  marks      Mark[]
-  attendance Attendance[]
+  marks           Mark[]
+  attendance      Attendance[]
   academicRecords StudentAcademicRecord[]
+  enrollments     StudentEnrollment[]
 }
 
 model Class {
-  id        String   @id @default(uuid())
-  name      String   @unique
+  id   String @id @default(uuid())
+  name String @unique
+  // LEGACY: Global teacher FK. NOT security authority.
+  // Canonical class teacher = ClassTeacherAssignment (ACTIVE, active session)
   teacherId String?
   teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  
-  students   Student[]
-  subjects   Subject[]
-  attendance Attendance[]
-  academicRecords StudentAcademicRecord[]
+
+  students         Student[]
+  subjects         Subject[]
+  attendance       Attendance[]
+  academicRecords  StudentAcademicRecord[]
+  enrollments      StudentEnrollment[]
+  learningChapters LearningChapter[]
+
+  // CANONICAL: New assignment relations
+  classTeacherAssignments ClassTeacherAssignment[]
+  teachingAssignments     TeachingAssignment[]
 }
 
 model Subject {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  code      String   @unique
+  id   String @id @default(uuid())
+  name String @unique
+  code String @unique
+  // LEGACY: Global teacher FK. NOT security authority.
+  // Canonical subject teacher = TeachingAssignment (ACTIVE, active session, specific class)
   teacherId String?
   teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
-  classes   Class[]
-  marks     Mark[]
+  classes          Class[]
+  marks            Mark[]
+  learningChapters LearningChapter[]
+
+  // CANONICAL: New assignment relation
+  teachingAssignments TeachingAssignment[]
 }
+
+// ============================================================
+// MARKS
+// ============================================================
 
 model Mark {
-  id        String     @id @default(uuid())
-  score     Float
-  maxScore  Float      @default(100)
-  examType  String     // e.g., 'Midterm', 'Final'
-  status    MarkStatus @default(DRAFT)
-  
-  studentId String
-  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subjectId String
-  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherId String
-  teacher   Teacher    @relation(fields: [teacherId], references: [id], onDelete: Restrict)
-  
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id       String     @id @default(uuid())
+  score    Float
+  maxScore Float      @default(100)
+  examType String // e.g., 'Midterm', 'Final'
+  status   MarkStatus @default(DRAFT)
 
-  @@unique([studentId, subjectId, examType])
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  // Session-scoped — FIXED: academicSessionId added to unique constraint
+  // This allows a student to have a Midterm mark in Math for both 2025 and 2026
+  academicSessionId String?
+  academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // FIXED: Was @@unique([studentId, subjectId, examType]) — now includes academicSessionId
+  // to prevent cross-session mark conflicts
+  @@unique([studentId, subjectId, examType, academicSessionId])
 }
 
+// ============================================================
+// SCHOOL SETTINGS
+// ============================================================
+
 model SchoolSettings {
-  id              String   @id @default("default") // Singleton
-  schoolName      String   @default("EduManage Academy")
-  schoolAddress   String   @default("123 Education Lane, Learning City")
-  contactNumber   String   @default("+1 234 567 8900")
-  principalName   String   @default("Dr. Jane Doe")
-  email           String   @default("contact@edumanage.com")
-  
+  id            String  @id @default("default") // Singleton
+  schoolName    String  @default("EduManage Academy")
+  schoolAddress String  @default("123 Education Lane, Learning City")
+  contactNumber String  @default("+1 234 567 8900")
+  principalName String  @default("Dr. Jane Doe")
+  email         String  @default("contact@edumanage.com")
+
   activeSessionId String?
   activeSession   AcademicSession? @relation(fields: [activeSessionId], references: [id])
 
-  updatedAt       DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
+
+// ============================================================
+// ACADEMIC SESSIONS
+// ============================================================
 
 model AcademicSession {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  startDate   DateTime
-  endDate     DateTime
-  status      AcademicSessionStatus @default(ACTIVE)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String                @id @default(uuid())
+  name      String                @unique
+  startDate DateTime
+  endDate   DateTime
+  status    AcademicSessionStatus @default(ACTIVE)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
-  settings    SchoolSettings[]
+  settings         SchoolSettings[]
+  enrollments      StudentEnrollment[]
+  marks            Mark[]
+  attendance       Attendance[]
+  academicRecords  StudentAcademicRecord[]
+  learningChapters LearningChapter[]
+
+  // CANONICAL: New assignment relations
+  classTeacherAssignments ClassTeacherAssignment[]
+  teachingAssignments     TeachingAssignment[]
 }
 
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  EXCUSED
-}
+// ============================================================
+// ATTENDANCE
+// ============================================================
 
 model Attendance {
-  id        String   @id @default(uuid())
-  date      DateTime
-  status    AttendanceStatus
-  remarks   String?
+  id      String           @id @default(uuid())
+  date    DateTime
+  status  AttendanceStatus
+  remarks String?
 
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // NOTE: classId is the class at the TIME of attendance, not current Student.classId
+  // This ensures historical attendance integrity after student transfers
   classId   String
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
   teacherId String
-  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  academicSessionId String?
+  academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -164,59 +247,286 @@ model Attendance {
   @@unique([studentId, date])
 }
 
-model Announcement {
-  id            String   @id @default(uuid())
-  title         String
-  content       String
-  targetRoles   String   // JSON string or comma-separated e.g. "STUDENT,TEACHER"
-  targetClasses String?  // Optional comma-separated list of class IDs
-  priority      String   @default("NORMAL") // "NORMAL", "HIGH"
-  expiresAt     DateTime?
+// ============================================================
+// ENROLLMENT — CANONICAL SOURCE OF TRUTH FOR ROSTER
+// ============================================================
 
-  authorId      String
-  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model ActivityLog {
-  id         String   @id @default(uuid())
-  action     String   // e.g., "MARK_PUBLISHED", "ATTENDANCE_MARKED"
-  entityType String   // e.g., "Mark", "Attendance", "Announcement"
-  entityId   String?  // The ID of the modified entity
-  details    String?  // JSON string of contextual changes
-
-  actorId    String
-  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
-
-  createdAt  DateTime @default(now())
-}
-
-model StudentAcademicRecord {
-  id                String   @id @default(uuid())
-
+model StudentEnrollment {
+  id                String           @id @default(uuid())
   studentId         String
   classId           String
-  academicSession   String
+  academicSessionId String
 
-  teacherRemarks    String?
-  principalRemarks  String?
+  // CANONICAL lifecycle status:
+  // ACTIVE     = current enrollment (the roster source of truth)
+  // TRANSFERRED = historical record when student moved classes within same session
+  // COMPLETED  = student was promoted to next session (end-of-year)
+  // INACTIVE   = student left school
+  status EnrollmentStatus @default(ACTIVE)
+
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class           Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+
+  academicRecords StudentAcademicRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // NOTE: @@unique([studentId, academicSessionId]) is INTENTIONALLY REMOVED
+  // A student can have TRANSFERRED + ACTIVE records in the same session (transfer history)
+  // Application layer enforces: exactly ONE ACTIVE per student per session
+  @@index([studentId, academicSessionId, status])
+  @@index([classId, academicSessionId, status])
+}
+
+// ============================================================
+// ACADEMIC RECORDS
+// ============================================================
+
+model StudentAcademicRecord {
+  id                String @id @default(uuid())
+  studentId         String
+  classId           String
+  academicSessionId String
+
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  enrollmentId    String?
+  enrollment      StudentEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+
+  teacherRemarks   String?
+  principalRemarks String?
 
   finalPercentage      Float?
   finalGrade           String?
   attendancePercentage Float?
   failedSubjectCount   Int?
 
-  status               AcademicRecordStatus @default(DRAFT)
-  publishedAt          DateTime?
-  finalizedAt          DateTime?
+  status      AcademicRecordStatus @default(DRAFT)
+  publishedAt DateTime?
+  finalizedAt DateTime?
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, academicSession])
+  @@unique([studentId, academicSessionId])
+}
+
+// ============================================================
+// ANNOUNCEMENTS & LOGS
+// ============================================================
+
+model Announcement {
+  id            String    @id @default(uuid())
+  title         String
+  content       String
+  targetRoles   String // JSON string or comma-separated e.g. "STUDENT,TEACHER"
+  targetClasses String? // Optional comma-separated list of class IDs
+  priority      String    @default("NORMAL") // "NORMAL", "HIGH"
+  expiresAt     DateTime?
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id         String  @id @default(uuid())
+  action     String // e.g., "MARK_PUBLISHED", "ATTENDANCE_MARKED"
+  entityType String // e.g., "Mark", "Attendance", "Announcement"
+  entityId   String? // The ID of the modified entity
+  details    String? // JSON string of contextual changes
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// NEW CANONICAL ASSIGNMENT MODELS
+// ============================================================
+
+// CANONICAL: Session-scoped class teacher assignment with full lifecycle history.
+//
+// Business rule: ONE ACTIVE class teacher per class per academic session.
+// When a teacher is replaced mid-session:
+//   - Old record: isActive=false, endedAt=now()
+//   - New record: isActive=true, assignedAt=now()
+// Both records are preserved for audit/dispute/history queries.
+//
+// Application layer enforces the one-ACTIVE-per-class-per-session invariant.
+model ClassTeacherAssignment {
+  id                String @id @default(uuid())
+  teacherId         String
+  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId           String
+  class             Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicSessionId String
+  academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+
+  // Lifecycle — full assignment history for audit trail
+  isActive   Boolean   @default(true)
+  assignedAt DateTime  @default(now())
+  endedAt    DateTime? // Set when this teacher is replaced or removed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Composite indexes for efficient active lookups
+  @@index([classId, academicSessionId, isActive])
+  @@index([teacherId, academicSessionId, isActive])
+}
+
+// CANONICAL: Per-subject, per-class, per-session teaching assignment with lifecycle history.
+//
+// Supports real multi-section scenarios:
+//   Teacher A → Mathematics → 10-A → 2026-27
+//   Teacher B → Mathematics → 10-B → 2026-27
+//   Teacher A → Physics → 11-A → 2026-27
+//
+// Business rule: ONE ACTIVE primary teacher per subject+class+session.
+// When a teacher changes mid-session:
+//   - Old record: isActive=false, endedAt=now()
+//   - New record: isActive=true, assignedAt=now()
+// Both records preserved for historical mark/attendance attribution.
+model TeachingAssignment {
+  id                String @id @default(uuid())
+  teacherId         String
+  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId         String
+  subject           Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classId           String
+  class             Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicSessionId String
+  academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+
+  // Lifecycle — full assignment history for audit trail
+  isActive   Boolean   @default(true)
+  assignedAt DateTime  @default(now())
+  endedAt    DateTime? // Set when this teacher is replaced or removed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Composite indexes for efficient active lookups
+  @@index([subjectId, classId, academicSessionId, isActive])
+  @@index([teacherId, academicSessionId, isActive])
+  @@index([classId, academicSessionId, isActive])
+}
+
+// ============================================================
+// LEARNING HUB — CLASS-SCOPED CONTENT
+// ============================================================
+
+// FIXED: classId added to LearningChapter for content isolation between class sections.
+// Teacher A creates Math chapters for 10-A → students in 10-B do NOT see them.
+// Teacher B creates Math chapters for 10-B → students in 10-A do NOT see them.
+// NULL classId = legacy content created before this fix (treated as subject-wide, backward compat).
+model LearningChapter {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  order       Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+
+  academicSessionId String
+  academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  // NEW: Class scope — content is per class section, not global per subject
+  // NULL = legacy backward-compat (subject-wide) — treated conservatively as visible to all enrolled
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  topics LearningTopic[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  @@index([academicSessionId, subjectId, classId])
+}
+
+model LearningTopic {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  order       Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+
+  chapterId String
+  chapter   LearningChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  pdfs        LearningPdf[]
+  videos      LearningVideo[]
+  explanation LearningExplanation?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  @@index([chapterId])
+}
+
+model LearningPdf {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  storagePath String
+  fileName    String
+  fileSize    Int
+  mimeType    String
+  order       Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+
+  topicId String
+  topic   LearningTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LearningVideo {
+  id           String        @id @default(uuid())
+  title        String
+  description  String?
+  storagePath  String
+  fileName     String?
+  thumbnailUrl String?
+  order        Int           @default(0)
+  status       ContentStatus @default(DRAFT)
+
+  topicId String
+  topic   LearningTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LearningExplanation {
+  id      String        @id @default(uuid())
+  content String // Serialized JSON AST
+  status  ContentStatus @default(DRAFT)
+
+  topicId String        @unique
+  topic   LearningTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+  createdBy   String?
+  updatedBy   String?
 }

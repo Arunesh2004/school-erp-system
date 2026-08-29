@@ -7,6 +7,18 @@ export default async function PromotionsPage() {
     orderBy: { name: 'asc' }
   })
 
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionId = settings?.activeSessionId
+
+  if (!activeSessionId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center bg-white rounded-lg border border-slate-200 shadow-sm p-8">
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">No Active Session</h2>
+        <p className="text-slate-500 max-w-md">An administrator must set an active academic session before promoting students.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-3">
@@ -19,7 +31,7 @@ export default async function PromotionsPage() {
         </div>
       </div>
 
-      <PromotionEngine classes={classes} />
+      <PromotionEngine classes={classes} activeSessionId={activeSessionId} />
     </div>
   )
 }

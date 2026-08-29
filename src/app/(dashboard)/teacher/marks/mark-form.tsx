@@ -12,11 +12,13 @@ import { upsertMark } from "@/app/actions/teacher"
 export function MarkForm({
   students,
   subjects,
-  existingMark
+  existingMark,
+  activeSessionId
 }: {
   students: { id: string, name: string | null }[],
   subjects: { id: string, name: string }[],
-  existingMark?: { studentId: string, subjectId: string, examType: string, score: number, status: string }
+  existingMark?: { studentId: string, subjectId: string, examType: string, score: number, status: string },
+  activeSessionId: string
 }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -31,6 +33,7 @@ export function MarkForm({
     // Status depends on the submit button pressed
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement
     formData.append("status", submitter.value)
+    formData.append("expectedSessionId", activeSessionId)
 
     startTransition(async () => {
       const res = await upsertMark(formData)

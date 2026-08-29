@@ -5,8 +5,9 @@ import { verifySession } from "@/lib/auth/session"
 import { revalidatePath } from "next/cache"
 
 import { calculateGrade } from "@/lib/academic/grading"
+import { assertClassTeacherOwnership } from "@/lib/auth/teacher-authorization"
 
-export async function saveRemarks(studentId: string, classId: string, academicSession: string, remarks: string) {
+export async function saveRemarks(studentId: string, classId: string, academicSessionId: string, remarks: string, expectedSessionId?: string) {
   const session = await verifySession()
   if (!session?.userId) return { success: false, error: "Unauthorized" }
 
@@ -20,16 +21,21 @@ export async function saveRemarks(studentId: string, classId: string, academicSe
   }
 
   // Verify class ownership
-  const teacherClass = await prisma.class.findFirst({
-    where: { id: classId, teacherId: dbUser.teacher.id }
-  })
-
-  if (!teacherClass) {
+  try {
+    await assertClassTeacherOwnership(dbUser.teacher.id, classId, academicSessionId);
+  } catch {
     return { success: false, error: "Not authorized for this class" }
   }
 
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionId = settings?.activeSessionId
+
+  if (expectedSessionId && expectedSessionId !== activeSessionId) {
+    return { success: false, error: "The active academic session has changed. Please reload the page." }
+  }
+
   const existingRecord = await prisma.studentAcademicRecord.findUnique({
-    where: { studentId_academicSession: { studentId, academicSession } }
+    where: { studentId_academicSessionId: { studentId, academicSessionId } }
   })
 
   if (existingRecord?.status === "FINALIZED") {
@@ -37,11 +43,15 @@ export async function saveRemarks(studentId: string, classId: string, academicSe
   }
 
   try {
+    const enrollment = await prisma.studentEnrollment.findFirst({
+      where: { studentId, academicSessionId, status: "ACTIVE" }
+    })
+
     await prisma.studentAcademicRecord.upsert({
       where: {
-        studentId_academicSession: {
+        studentId_academicSessionId: {
           studentId,
-          academicSession
+          academicSessionId
         }
       },
       update: {
@@ -50,7 +60,8 @@ export async function saveRemarks(studentId: string, classId: string, academicSe
       create: {
         studentId,
         classId,
-        academicSession,
+        academicSessionId,
+        enrollmentId: enrollment?.id,
         teacherRemarks: remarks
       }
     })
@@ -66,10 +77,11 @@ export async function saveRemarks(studentId: string, classId: string, academicSe
 export async function publishReport(
   studentId: string, 
   classId: string, 
-  academicSession: string, 
+  academicSessionId: string, 
   finalPercentage: number, 
   finalGrade: string, 
-  remarks: string
+  remarks: string,
+  expectedSessionId?: string
 ) {
   const session = await verifySession()
   if (!session?.userId) return { success: false, error: "Unauthorized" }
@@ -84,16 +96,21 @@ export async function publishReport(
   }
 
   // Verify class ownership
-  const teacherClass = await prisma.class.findFirst({
-    where: { id: classId, teacherId: dbUser.teacher.id }
-  })
-
-  if (!teacherClass) {
+  try {
+    await assertClassTeacherOwnership(dbUser.teacher.id, classId, academicSessionId);
+  } catch {
     return { success: false, error: "Not authorized for this class" }
   }
 
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionIdServer = settings?.activeSessionId
+
+  if (expectedSessionId && expectedSessionId !== activeSessionIdServer) {
+    return { success: false, error: "The active academic session has changed. Please reload the page." }
+  }
+
   const existingRecord = await prisma.studentAcademicRecord.findUnique({
-    where: { studentId_academicSession: { studentId, academicSession } }
+    where: { studentId_academicSessionId: { studentId, academicSessionId } }
   })
 
   if (existingRecord?.status === "FINALIZED") {
@@ -101,11 +118,15 @@ export async function publishReport(
   }
 
   try {
+    const enrollment = await prisma.studentEnrollment.findFirst({
+      where: { studentId, academicSessionId, status: "ACTIVE" }
+    })
+
     await prisma.studentAcademicRecord.upsert({
       where: {
-        studentId_academicSession: {
+        studentId_academicSessionId: {
           studentId,
-          academicSession
+          academicSessionId
         }
       },
       update: {
@@ -118,7 +139,8 @@ export async function publishReport(
       create: {
         studentId,
         classId,
-        academicSession,
+        academicSessionId,
+        enrollmentId: enrollment?.id,
         finalPercentage,
         finalGrade,
         teacherRemarks: remarks,
@@ -138,12 +160,13 @@ export async function publishReport(
 export async function finalizeRecord(
   studentId: string, 
   classId: string, 
-  academicSession: string,
+  academicSessionId: string,
   finalPercentage: number,
   finalGrade: string,
   attendancePercentage: number,
   failedSubjectCount: number,
-  remarks: string
+  remarks: string,
+  expectedSessionId?: string
 ) {
   const session = await verifySession()
   if (!session?.userId) return { success: false, error: "Unauthorized" }
@@ -157,16 +180,21 @@ export async function finalizeRecord(
     return { success: false, error: "Forbidden" }
   }
 
-  const teacherClass = await prisma.class.findFirst({
-    where: { id: classId, teacherId: dbUser.teacher.id }
-  })
-
-  if (!teacherClass) {
+  try {
+    await assertClassTeacherOwnership(dbUser.teacher.id, classId, academicSessionId);
+  } catch {
     return { success: false, error: "Not authorized for this class" }
   }
 
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "default" } })
+  const activeSessionIdServer = settings?.activeSessionId
+
+  if (expectedSessionId && expectedSessionId !== activeSessionIdServer) {
+    return { success: false, error: "The active academic session has changed. Please reload the page." }
+  }
+
   const existingRecord = await prisma.studentAcademicRecord.findUnique({
-    where: { studentId_academicSession: { studentId, academicSession } }
+    where: { studentId_academicSessionId: { studentId, academicSessionId } }
   })
 
   if (existingRecord?.status === "FINALIZED") {
@@ -174,9 +202,13 @@ export async function finalizeRecord(
   }
 
   try {
+    const enrollment = await prisma.studentEnrollment.findFirst({
+      where: { studentId, academicSessionId, status: "ACTIVE" }
+    })
+
     await prisma.studentAcademicRecord.upsert({
       where: {
-        studentId_academicSession: { studentId, academicSession }
+        studentId_academicSessionId: { studentId, academicSessionId }
       },
       update: {
         finalPercentage,
@@ -190,7 +222,8 @@ export async function finalizeRecord(
       create: {
         studentId,
         classId,
-        academicSession,
+        academicSessionId,
+        enrollmentId: enrollment?.id,
         finalPercentage,
         finalGrade,
         attendancePercentage,
@@ -205,8 +238,8 @@ export async function finalizeRecord(
       data: {
         action: "RECORD_FINALIZED",
         entityType: "StudentAcademicRecord",
-        entityId: `${studentId}_${academicSession}`,
-        details: JSON.stringify({ studentId, academicSession, finalGrade }),
+        entityId: `${studentId}_${academicSessionId}`,
+        details: JSON.stringify({ studentId, academicSessionId, finalGrade }),
         actorId: dbUser.id
       }
     })

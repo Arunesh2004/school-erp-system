@@ -35,7 +35,9 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
   const record = await prisma.studentAcademicRecord.findUnique({
     where: { id: recordId },
     include: {
-      student: { include: { user: true, class: true } }
+      student: { include: { user: true, class: true } },
+      academicSession: true,
+      enrollment: { include: { class: true } }
     }
   })
 
@@ -57,7 +59,7 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
   const peerRecords = await prisma.studentAcademicRecord.findMany({
     where: {
       classId: record.classId,
-      academicSession: record.academicSession,
+      academicSessionId: record.academicSessionId,
       status: { in: ["PUBLISHED", "FINALIZED"] }
     },
     orderBy: {
@@ -79,6 +81,7 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
   const marks = await prisma.mark.findMany({
     where: { 
       studentId: record.studentId,
+      academicSessionId: record.academicSessionId,
       status: "PUBLISHED"
     },
     include: { subject: true },
@@ -109,7 +112,7 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
         </Link>
       </div>
 
-      <PdfExportWrapper filename={`${record.student.user.name?.replace(/\s+/g, '_')}_${record.academicSession}_Report_Card.pdf`} targetId={`marksheet-${record.id}`}>
+      <PdfExportWrapper filename={`${record.student.user.name?.replace(/\s+/g, '_')}_${record.academicSession.name}_Report_Card.pdf`} targetId={`marksheet-${record.id}`}>
         <Card id={`marksheet-${record.id}`} className={`shadow-xl border-slate-200 bg-white print:shadow-none print:border-none overflow-hidden ${isFinalized ? 'border-indigo-200' : ''}`}>
           
           {isFinalized && (
@@ -135,7 +138,7 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
                   Official Academic Transcript
                 </div>
                 <div className="bg-indigo-600/90 backdrop-blur-sm print:bg-slate-100 print:text-black text-white px-8 py-2.5 rounded-full text-sm font-bold tracking-wider uppercase border border-indigo-500 print:border-slate-300">
-                  Session: {record.academicSession}
+                  Session: {record.academicSession.name}
                 </div>
               </div>
             </div>
@@ -154,7 +157,7 @@ export default async function ReportCardPage({ params }: { params: Promise<{ rec
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Class / Homeroom</span>
-                <span className="text-lg font-bold text-slate-800">{record.student.class?.name || "Unassigned"}</span>
+                <span className="text-lg font-bold text-slate-800">{record.enrollment?.class?.name || record.student.class?.name || "Unassigned"}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date of Issue</span>

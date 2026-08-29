@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/button"
 import { LogOut, User as UserIcon } from "lucide-react"
 import { logout } from "@/app/(auth)/login/actions"
+import { MobileNav } from "./mobile-nav"
 
-export function Header({ userName, role, academicSession }: { userName: string | null, role: string, academicSession: string }) {
+export function Header({ userName, role, academicSession, schoolName, isClassTeacher }: { userName: string | null, role: "ADMIN" | "TEACHER" | "STUDENT", academicSession: string, schoolName: string, isClassTeacher?: boolean }) {
   const handleLogout = async () => {
     await logout()
   }
@@ -12,8 +13,8 @@ export function Header({ userName, role, academicSession }: { userName: string |
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-white/80 backdrop-blur-md px-4 lg:px-8 justify-between sticky top-0 z-50 shadow-sm">
       <div className="flex flex-1 items-center gap-4">
-        {/* Mobile menu could go here */}
-        <h1 className="text-xl font-bold tracking-tight text-slate-800 capitalize">{role.toLowerCase()} Portal</h1>
+        <MobileNav role={role} schoolName={schoolName} isClassTeacher={isClassTeacher} />
+        <h1 className="hidden sm:block text-xl font-bold tracking-tight text-slate-800 capitalize">{role.toLowerCase()} Portal</h1>
         <div className="hidden md:flex items-center px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-600 tracking-wider uppercase">
           ACADEMIC SESSION: {academicSession}
         </div>

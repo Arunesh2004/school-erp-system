@@ -7,6 +7,8 @@ import { DataTableSearch } from "@/components/ui/data-table-search"
 import { PaginationControls } from "@/components/ui/pagination-controls"
 import { AssignClassModal } from "@/components/dashboard/assign-class-modal"
 import { Badge } from "@/components/ui/badge"
+import { CsvExportButton } from "@/components/dashboard/csv-export-button"
+import { exportAllTeachers } from "@/app/actions/export"
 
 export default async function AdminTeachersPage(
   props: { searchParams: Promise<{ q?: string, page?: string }> }
@@ -37,11 +39,34 @@ export default async function AdminTeachersPage(
       prisma.class.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
     ])
 
+  const exportData = (Array.isArray(teachers) ? teachers : []).map(teacher => ({
+    name: teacher.user.name,
+    email: teacher.user.email,
+    assignedClass: teacher.classes && teacher.classes.length > 0 ? teacher.classes[0].name : "Not Assigned",
+    enrolledDate: new Date(teacher.user.createdAt).toLocaleDateString()
+  }))
+
+  const exportColumns = [
+    { header: "Name", key: "name" },
+    { header: "Email", key: "email" },
+    { header: "Assigned Class", key: "assignedClass" },
+    { header: "Enrolled Date", key: "enrolledDate" }
+  ]
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manage Teachers</h1>
-        <TeacherForm />
+        <div className="flex items-center gap-3">
+          <CsvExportButton
+            data={exportData as Record<string, unknown>[]}
+            filename="Teachers_Export"
+            columns={exportColumns}
+            fetchAllAction={exportAllTeachers.bind(null) as any}
+            label="Export All Teachers"
+          />
+          <TeacherForm />
+        </div>
       </div>
 
       <div className="flex items-center gap-4 bg-white p-4 rounded-md shadow-sm border border-slate-200">

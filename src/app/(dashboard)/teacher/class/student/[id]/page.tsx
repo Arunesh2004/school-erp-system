@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { getClassTeacherClassIds } from "@/lib/auth/teacher-authorization"
 import { Textarea } from "@/components/ui/textarea"
 import { Printer, ShieldCheck, User, Save, BookOpen, AlertCircle, Calendar, Lock } from "lucide-react"
 import { saveRemarks, publishReport, finalizeRecord } from "./actions"
@@ -65,8 +66,12 @@ export default async function StudentProfilePage(
     )
   }
 
+  const settings = await prisma.schoolSettings.findFirst({ include: { activeSession: true } })
+  const academicSessionId = settings?.activeSessionId || ""
+
   // Strict Authorization: ONLY class teacher can view this profile
-  if (student.class.teacherId !== dbUser.teacher.id) {
+  const classIds = await getClassTeacherClassIds(dbUser.teacher.id, academicSessionId);
+  if (!classIds.includes(student.class.id)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div className="bg-red-50 p-6 rounded-full mb-4">
@@ -74,7 +79,7 @@ export default async function StudentProfilePage(
         </div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Access Denied</h2>
         <p className="text-slate-500 max-w-md mb-4">
-          You are not the assigned class teacher for {student.class.name}. Only the class teacher can view full academic profiles.
+          You are not the assigned class teacher for {student.class.name} in the current session. Only the class teacher can view full academic profiles.
         </p>
         <Link href="/teacher/class">
           <Button variant="outline">Return to My Class</Button>
@@ -83,14 +88,13 @@ export default async function StudentProfilePage(
     )
   }
 
-  const settings = await prisma.schoolSettings.findFirst({ include: { activeSession: true } })
-  const academicSession = settings?.activeSession?.name || "2024-2025"
+  const academicSessionName = settings?.activeSession?.name || "2024-2025"
 
   const academicRecord = await prisma.studentAcademicRecord.findUnique({
     where: {
-      studentId_academicSession: {
+      studentId_academicSessionId: {
         studentId: student.id,
-        academicSession: academicSession
+        academicSessionId: academicSessionId
       }
     }
   })
@@ -133,7 +137,7 @@ export default async function StudentProfilePage(
     "use server"
     if (!student || !student.classId) return
     const remarks = formData.get("remarks") as string
-    await saveRemarks(student.id, student.classId, academicSession, remarks)
+    await saveRemarks(student.id, student.classId, academicSessionId, remarks, academicSessionId)
     revalidatePath(`/teacher/class/student/${student.id}`)
   }
 
@@ -141,7 +145,7 @@ export default async function StudentProfilePage(
     "use server"
     if (!student || !student.classId) return
     const remarks = formData.get("remarks") as string
-    await publishReport(student.id, student.classId, academicSession, finalPercentage, finalGrade, remarks)
+    await publishReport(student.id, student.classId, academicSessionId, finalPercentage, finalGrade, remarks, academicSessionId)
     revalidatePath(`/teacher/class/student/${student.id}`)
   }
 
@@ -158,12 +162,13 @@ export default async function StudentProfilePage(
     await finalizeRecord(
       student.id, 
       student.classId, 
-      academicSession, 
+      academicSessionId, 
       finalPercentage, 
       finalGrade, 
       attendancePercentage, 
       failedSubjectCount, 
-      remarks
+      remarks,
+      academicSessionId
     )
     revalidatePath(`/teacher/class/student/${student.id}`)
   }
@@ -214,7 +219,7 @@ export default async function StudentProfilePage(
               <div className="font-medium text-right text-slate-900">{student.class.name}</div>
               
               <div className="text-slate-500">Academic Session</div>
-              <div className="font-medium text-right text-slate-900">{academicSession}</div>
+              <div className="font-medium text-right text-slate-900">{academicSessionName}</div>
               
               <div className="text-slate-500">Attendance</div>
               <div className="font-medium text-right text-slate-900">
